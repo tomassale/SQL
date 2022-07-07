@@ -97,7 +97,7 @@ VALUES  ('102.231.167.128','CN','Dachong','5709 Dunning Drive'),
 		('128.31.85.175','FR','Pouzauges','2791 Corscot Parkway'),
 		('144.128.37.184','TO','Pangai','3244 Mosinee Park'),
 		('170.2.31.135','FI','Lestijarvi','7 Pearson Parkway'),
-		('182.105.207.141','FR','Levallois-Perret','1 Schiller Hill'),
+		('182.104.207.141','FR','Levallois-Perret','1 Schiller Hill'),
 		('198.1.168.51','NG','Maiyema','61 Carberry Point'),
 		('199.52.19.14','US','Austin','6003 Moulton Road'),
 		('23.206.0.188','BW','Ghanzi','7490 Hudson Parkway'),
@@ -203,12 +203,25 @@ VALUES  ('04-413-3487','Jaxspan','Mibu',1,'vestibulum ante ipsum primis in fauci
 		('98-385-2640','Youspan','Tambakmerak',3,'vel pede morbi porttitor lorem id ligula suspendisse ornare consequat');
 
 -- Vistas de tablas
-CREATE OR REPLACE VIEW user_view as SELECT * FROM user;
-CREATE OR REPLACE VIEW page_view as SELECT name_page, date_registered_page FROM page;
-CREATE OR REPLACE VIEW personal_view as SELECT user_first_name, user_last_name FROM personal;
-CREATE OR REPLACE VIEW company_view as SELECT duns_company, name_company, requirement_purpose FROM company;
-CREATE OR REPLACE VIEW data_view as
-	(SELECT DISTINCT user_mail um, user_first_name ufn,user_last_name uln,person_history ph,street s
-    from account join personal, history, address
-    );
- SELECT * FROM data_view;
+CREATE OR REPLACE VIEW user_view as
+	SELECT * 
+    FROM user;
+CREATE OR REPLACE VIEW page_view as 
+	SELECT name_page, date_registered_page 
+	FROM page;
+CREATE OR REPLACE VIEW personal_view as 
+	SELECT user_first_name, user_last_name 
+	FROM personal;
+CREATE OR REPLACE VIEW company_view as 
+	SELECT duns_company, name_company, requirement_purpose 
+	FROM company;
+CREATE OR REPLACE VIEW join_view as
+	SELECT DISTINCT u.id_user, ac.user_mail, h.id_history, a.ip_user
+		FROM user u
+		INNER JOIN address a
+		ON u.ip_user = a.ip_user
+		INNER JOIN account ac
+		ON ac.user_mail = u.user_mail
+		INNER JOIN history h
+		ON h.id_history = u.id_history;
+    ;
