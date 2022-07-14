@@ -250,7 +250,6 @@ BEGIN
 END$$
 
 -- Funcion SQL muestra gender mediante nombre y apellido
-DROP FUNCTION user_gender;
 DELIMITER $$
 CREATE FUNCTION `user_gender`(name VARCHAR(20), last_name VARCHAR(20)) RETURNS VARCHAR(50)
 READS SQL DATA
