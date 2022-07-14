@@ -16,6 +16,7 @@ CREATE TABLE `personal`(
     gender VARCHAR(10) NOT NULL,
 	user_first_name VARCHAR(20) NOT NULL,
     user_last_name VARCHAR(30) NOT NULL,
+    age INT NOT NULL,
     CONSTRAINT PK_PERSONAL PRIMARY KEY (id_personal)
 );
 CREATE TABLE `account`(
@@ -73,22 +74,22 @@ ALTER TABLE company
 	ADD FOREIGN KEY FK_COMPANY_DATA (register_data) REFERENCES data (register_data);
 
 -- Se insertan los datos en las tablas
-INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`) 
-VALUES  (null,'Female','Jaimie','Dufton'),
-	    (null,'Male','Jasun','Rossant'),
-		(null,'Female','Audrye','Guise'),
-		(null,'Female','Julietta','Frances'),
-		(null,'Female','Reiko','Forcer'),
-		(null,'Male','Kerwinn','Walkinshaw'),
-		(null,'Female','Doti','Moller'),
-		(null,'Female','Aveline','Thorndale'),
-		(null,'Female','Ema','Outlaw'),
-		(null,'Female','Amelita','Emanuel'),
-		(null,'Female','Agatha','Vel'),
-		(null,'Male','Charlton','Joderli'),
-		(null,'Female','Deidre','Inman'),
-		(null,'Male','Ernie','Goscar'),
-		(null,'Male','Der','Pinching');
+INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`,`age`) 
+VALUES  (null,'Female','Jaimie','Dufton', 30),
+	    (null,'Male','Jasun','Rossant', 55),
+		(null,'Female','Audrye','Guise', 70),
+		(null,'Female','Julietta','Frances', 46),
+		(null,'Female','Reiko','Forcer', 21),
+		(null,'Male','Kerwinn','Walkinshaw', 17),
+		(null,'Female','Doti','Moller', 61),
+		(null,'Female','Aveline','Thorndale', 19),
+		(null,'Female','Ema','Outlaw', 23),
+		(null,'Female','Amelita','Emanuel', 41),
+		(null,'Female','Agatha','Vel', 86),
+		(null,'Male','Charlton','Joderli', 37),
+		(null,'Female','Deidre','Inman', 75),
+		(null,'Male','Ernie','Goscar', 46),
+		(null,'Male','Der','Pinching', 76);
 INSERT INTO address (`ip_user`,`country_code`,`city`,`street`) 
 VALUES  ('102.231.167.128','CN','Dachong','5709 Dunning Drive'),
 		('107.191.247.221','KZ','Qulsary','4 Kim Circle'),
@@ -202,19 +203,23 @@ VALUES  ('04-413-3487','Jaxspan','Mibu',1,'vestibulum ante ipsum primis in fauci
 		('93-730-6330','Skinix','Jayapura',8,'lobortis convallis tortor risus dapibus augue vel accumsan tellus nisi eu'),
 		('98-385-2640','Youspan','Tambakmerak',3,'vel pede morbi porttitor lorem id ligula suspendisse ornare consequat');
 
--- Vistas de tablas
+-- Vista de la tabla user
 CREATE OR REPLACE VIEW user_view as
 	SELECT * 
     FROM user;
+-- Vista de nombre y fecha registrada de la pagina
 CREATE OR REPLACE VIEW page_view as 
 	SELECT name_page, date_registered_page 
 	FROM page;
+-- Vista de nombre y apellido del usuario
 CREATE OR REPLACE VIEW personal_view as 
 	SELECT user_first_name, user_last_name 
-	FROM personal;
+	FROM personal; 
+-- Vista de duns, nombre y requerimiento de las empresas
 CREATE OR REPLACE VIEW company_view as 
 	SELECT duns_company, name_company, requirement_purpose 
 	FROM company;
+-- Vista con join de user, account, history y address
 CREATE OR REPLACE VIEW join_view as
 	SELECT DISTINCT u.id_user, ac.user_mail, h.id_history, a.ip_user
 		FROM user u
@@ -225,3 +230,40 @@ CREATE OR REPLACE VIEW join_view as
 		INNER JOIN history h
 		ON h.id_history = u.id_history;
     ;
+    
+-- Funcion NoSQL calculadora de precio final para compra virtual
+DELIMITER $$
+CREATE FUNCTION `compra_virtual`(precio INT) RETURNS VARCHAR(255)
+NO SQL
+BEGIN
+	DECLARE precio_final INT;
+    DECLARE iva FLOAT;
+    DECLARE impuesto_pais FLOAT;
+    SET impuesto_pais = precio * 0.30;
+    SET iva = precio * 0.21;
+    SET precio_final = round(precio + (impuesto_pais + iva));
+    IF (precio < 1) THEN
+		RETURN CONCAT('Se necesita un valor mayor a 1');
+    ELSE
+		RETURN CONCAT('Precio Final: ', precio_final);
+    END IF;
+END$$
+
+-- Funcion SQL muestra gender mediante nombre y apellido
+DROP FUNCTION user_gender;
+DELIMITER $$
+CREATE FUNCTION `user_gender`(name VARCHAR(20), last_name VARCHAR(20)) RETURNS VARCHAR(50)
+READS SQL DATA
+BEGIN
+	DECLARE gender_u VARCHAR(50);
+    SET gender_u = (SELECT gender FROM personal WHERE 
+					user_first_name IN (SELECT user_first_name FROM personal WHERE user_first_name = name) 
+						AND 
+					user_last_name IN (SELECT user_last_name FROM personal WHERE user_last_name = last_name)
+				);
+	IF isnull(gender_u) THEN
+		RETURN CONCAT('Nombre o apellido invalido');
+	ELSE 
+	    RETURN CONCAT('Genero: ',gender_u);
+	END IF;
+END$$
