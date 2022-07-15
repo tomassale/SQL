@@ -1,4 +1,5 @@
 -- Se crea la base de datos y se posiciona en la misma
+DROP DATABASE IF EXISTS DB_WineHouse;
 CREATE DATABASE DB_WineHouse;
 USE DB_WineHouse;
 
@@ -232,6 +233,7 @@ CREATE OR REPLACE VIEW join_view as
     ;
     
 -- Funcion NoSQL calculadora de precio final para compra virtual
+DROP FUNCTION IF EXISTS `compra_virtual`;
 DELIMITER $$
 CREATE FUNCTION `compra_virtual`(precio INT) RETURNS VARCHAR(255)
 NO SQL
@@ -249,7 +251,8 @@ BEGIN
     END IF;
 END$$
 
--- Funcion SQL muestra gender mediante nombre y apellido
+-- Funcion SQL muestra gender
+DROP FUNCTION IF EXISTS `user_gender`;
 DELIMITER $$
 CREATE FUNCTION `user_gender`(name VARCHAR(20), last_name VARCHAR(20)) RETURNS VARCHAR(50)
 READS SQL DATA
@@ -260,9 +263,53 @@ BEGIN
 						AND 
 					user_last_name IN (SELECT user_last_name FROM personal WHERE user_last_name = last_name)
 				);
-	IF isnull(gender_u) THEN
+	IF isnull(gender_u) THEN  
 		RETURN CONCAT('Nombre o apellido invalido');
 	ELSE 
 	    RETURN CONCAT('Genero: ',gender_u);
 	END IF;
+END$$
+
+
+-- Stored Procedure de data ordena campo con especificacion de asc or desc
+DROP PROCEDURE IF EXISTS `sp_get_data_ordered`;
+DELIMITER $$
+CREATE PROCEDURE `sp_get_data_ordered`(IN p_field VARCHAR(50), IN p_ord VARCHAR(20))
+BEGIN
+	IF p_field = '' THEN
+		SET @order_field = '';
+	ELSE
+        IF p_ord = '' THEN
+			SET @order_way = '';
+		ELSE
+			SET @order_way = CONCAT(' ', upper(p_ord));
+            SET @order_field = CONCAT('ORDER BY ', p_field);
+		END IF;
+	END IF;
+	SET @clausula = CONCAT('SELECT * FROM data ', @order_field, @order_way);
+    PREPARE runSQL FROM @clausula;
+    EXECUTE runSQL;
+    DEALLOCATE PREPARE runSQL;
+END$$
+
+-- Stored procedure insertar datos en tabla company
+DROP PROCEDURE IF EXISTS `sp_insert_company`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_company`(IN p_duns_company VARCHAR(15), IN p_name_company VARCHAR(50), IN p_headquarters VARCHAR(50), IN p_register_data INT, IN p_requirement_purpose VARCHAR(200))
+BEGIN
+	IF p_duns_company = '' OR p_name_company = '' OR p_headquarters = '' OR p_register_data = 0 OR p_requirement_purpose = '' THEN
+		SELECT 'ERROR: parametro faltante o invalido';
+	ELSE
+        INSERT INTO company (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
+        SELECT * FROM company c WHERE c.duns_company = p_duns_company; 
+	END IF;
+END$$
+
+-- Stored procedure eliminar datos en tabla company
+DROP PROCEDURE IF EXISTS `sp_delete_company`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_personal`(IN p_duns_company VARCHAR(15))
+BEGIN
+	DELETE FROM company c WHERE c.duns_company = p_duns_company;
+    SELECT 'Elemento eliminado exitosamente';
 END$$
