@@ -1,9 +1,21 @@
+
 -- Se crea la base de datos y se posiciona en la misma
 DROP DATABASE IF EXISTS DB_WineHouse;
 CREATE DATABASE DB_WineHouse;
 USE DB_WineHouse;
 
+
 -- Creacion de tablas
+CREATE TABLE `logs`(
+	id_logs INT NOT NULL AUTO_INCREMENT,
+    table_logs VARCHAR(20),
+    dml VARCHAR(20),
+	registered_logs DATETIME,
+    user VARCHAR(50),
+    db VARCHAR(100),
+    version VARCHAR(20),
+    CONSTRAINT PK_LOGS PRIMARY KEY (id_logs)
+);
 CREATE TABLE `user`(
 	id_user INT NOT NULL AUTO_INCREMENT,
     user_mail VARCHAR(50) NOT NULL,
@@ -61,6 +73,73 @@ CREATE TABLE `company`(
     CONSTRAINT PK_COMPANY PRIMARY KEY (duns_company)
 );
 
+-- Creacion de backups
+CREATE TABLE `backup_user`(
+	datetime_user DATETIME NOT NULL,
+	bu_id_user INT NOT NULL AUTO_INCREMENT,
+    bu_user_mail VARCHAR(50) NOT NULL,
+    bu_id_personal INT NOT NULL,
+    bu_ip_user VARCHAR(20) NOT NULL,
+    bu_id_history INT NOT NULL,
+    CONSTRAINT PK_USER PRIMARY KEY (bu_id_user)
+);
+CREATE TABLE `backup_personal`(
+	datetime_personal DATETIME NOT NULL,
+	bu_id_personal INT NOT NULL AUTO_INCREMENT,
+    gender VARCHAR(10) NOT NULL,
+	user_first_name VARCHAR(20) NOT NULL,
+    user_last_name VARCHAR(30) NOT NULL,
+    age INT NOT NULL,
+    CONSTRAINT PK_PERSONAL PRIMARY KEY (bu_id_personal)
+);
+CREATE TABLE `backup_account`(
+	datetime_account DATETIME NOT NULL,
+    bu_user_mail VARCHAR (50) NOT NULL,
+	user_password VARCHAR(50) NOT NULL,
+	register_account DATETIME NOT NULL,
+    CONSTRAINT PK_ACCOUNT PRIMARY KEY (bu_user_mail)
+);
+CREATE TABLE `backup_address`(
+	datetime_address DATETIME NOT NULL,
+    bu_ip_user VARCHAR(20) NOT NULL,
+	country_code VARCHAR(10) NOT NULL,
+    city VARCHAR(50) NOT NULL,
+    street VARCHAR (60) NOT NULL,
+	CONSTRAINT PK_ADDRESS PRIMARY KEY (bu_ip_user)
+);
+CREATE TABLE `backup_history`(
+	datetime_history DATETIME NOT NULL,
+	bu_id_history INT NOT NULL AUTO_INCREMENT,
+    person_history INT NOT NULL,
+    bu_name_page VARCHAR(50) NOT NULL,
+    CONSTRAINT PK_HISTORY PRIMARY KEY (bu_id_history)
+);
+CREATE TABLE `backup_page`(
+	datetime_page DATETIME NOT NULL,
+    bu_name_page VARCHAR(50) NOT NULL,
+	date_registered_page DATETIME NOT NULL,
+    info TEXT NOT NULL,
+	CONSTRAINT PK_PAGE PRIMARY KEY (bu_name_page)
+);
+CREATE TABLE `backup_data`(
+	datetime_data DATETIME NOT NULL,
+	bu_register_data INT NOT NULL AUTO_INCREMENT,
+    db INT NOT NULL,
+    bu_id_user INT NOT NULL,
+	date_data DATETIME NOT NULL,
+	CONSTRAINT PK_DATA PRIMARY KEY (bu_register_data)
+);
+CREATE TABLE `backup_company`(
+	datetime_company DATETIME NOT NULL,
+	bu_duns_company VARCHAR(15),
+    name_company VARCHAR(50),
+    headquarters VARCHAR(50),
+	bu_register_data INT NOT NULL,
+    requirement_purpose VARCHAR(200),
+    CONSTRAINT PK_COMPANY PRIMARY KEY (bu_duns_company)
+);
+
+
 -- Se vinculan las tablas mediante Foreign Key
 ALTER TABLE user
 	ADD FOREIGN KEY FK_USER_ADDRESS (ip_user) REFERENCES address (ip_user),
@@ -73,6 +152,287 @@ ALTER TABLE data
 	ADD FOREIGN KEY FK_DATA_USER (id_user) REFERENCES user (id_user);
 ALTER TABLE company
 	ADD FOREIGN KEY FK_COMPANY_DATA (register_data) REFERENCES data (register_data);
+
+-- Vista de la tabla logs
+CREATE OR REPLACE VIEW logs_view as
+	SELECT id_logs, table_logs, dml, registered_logs, user
+    FROM logs;
+-- Vista de la tabla user
+CREATE OR REPLACE VIEW user_view as
+	SELECT * 
+    FROM user;
+-- Vista de nombre y fecha registrada de la pagina
+CREATE OR REPLACE VIEW page_view as 
+	SELECT name_page, date_registered_page 
+	FROM page;
+-- Vista de nombre y apellido del usuario
+CREATE OR REPLACE VIEW personal_view as 
+	SELECT user_first_name, user_last_name 
+	FROM personal; 
+-- Vista de duns, nombre y requerimiento de las empresas
+CREATE OR REPLACE VIEW company_view as 
+	SELECT duns_company, name_company, requirement_purpose 
+	FROM company;
+-- Vista con join de user, account, history y address
+CREATE OR REPLACE VIEW join_view as
+	SELECT DISTINCT u.id_user, ac.user_mail, h.id_history, a.ip_user
+		FROM user u
+		INNER JOIN address a
+		ON u.ip_user = a.ip_user
+		INNER JOIN account ac
+		ON ac.user_mail = u.user_mail
+		INNER JOIN history h
+		ON h.id_history = u.id_history;
+    ;
+
+
+-- Funcion NoSQL calculadora de precio final para compra virtual
+DROP FUNCTION IF EXISTS `compra_virtual`;
+DELIMITER $$
+CREATE FUNCTION `compra_virtual`(precio INT) RETURNS VARCHAR(255)
+NO SQL
+BEGIN
+	DECLARE precio_final INT;
+    DECLARE iva FLOAT;
+    DECLARE impuesto_pais FLOAT;
+    SET impuesto_pais = precio * 0.30;
+    SET iva = precio * 0.21;
+    SET precio_final = round(precio + (impuesto_pais + iva));
+    IF (precio < 1) THEN
+		RETURN CONCAT('Se necesita un valor mayor a 1');
+    ELSE
+		RETURN CONCAT('Precio Final: ', precio_final);
+    END IF;
+END$$
+
+-- Funcion SQL muestra gender
+DROP FUNCTION IF EXISTS `user_gender`;
+DELIMITER $$
+CREATE FUNCTION `user_gender`(name VARCHAR(20), last_name VARCHAR(20)) RETURNS VARCHAR(50)
+READS SQL DATA
+BEGIN
+	DECLARE gender_u VARCHAR(50);
+    SET gender_u = (SELECT gender FROM personal WHERE 
+					user_first_name IN (SELECT user_first_name FROM personal WHERE user_first_name = name) 
+						AND 
+					user_last_name IN (SELECT user_last_name FROM personal WHERE user_last_name = last_name)
+				);
+	IF isnull(gender_u) THEN  
+		RETURN CONCAT('Nombre o apellido invalido');
+	ELSE 
+	    RETURN CONCAT('Genero: ',gender_u);
+	END IF;
+END$$
+
+
+-- Stored Procedure de data ordena campo con especificacion de asc or desc
+DROP PROCEDURE IF EXISTS `sp_get_data_ordered`;
+DELIMITER $$
+CREATE PROCEDURE `sp_get_data_ordered`(IN p_field VARCHAR(50), IN p_ord VARCHAR(20))
+BEGIN
+	IF p_field = '' THEN
+		SET @order_field = '';
+	ELSE
+        IF p_ord = '' THEN
+			SET @order_way = '';
+		ELSE
+			SET @order_way = CONCAT(' ', upper(p_ord));
+            SET @order_field = CONCAT('ORDER BY ', p_field);
+		END IF;
+	END IF;
+	SET @clausula = CONCAT('SELECT * FROM data ', @order_field, @order_way);
+    PREPARE runSQL FROM @clausula;
+    EXECUTE runSQL;
+    DEALLOCATE PREPARE runSQL;
+END$$
+
+-- Stored procedure insertar datos en tabla company
+DROP PROCEDURE IF EXISTS `sp_insert_company`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_company`(IN p_duns_company VARCHAR(15), IN p_name_company VARCHAR(50), IN p_headquarters VARCHAR(50), IN p_register_data INT, IN p_requirement_purpose VARCHAR(200))
+BEGIN
+	IF p_duns_company = '' OR p_name_company = '' OR p_headquarters = '' OR p_register_data = 0 OR p_requirement_purpose = '' THEN
+		SELECT 'ERROR: parametro faltante o invalido';
+	ELSE
+        INSERT INTO company (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
+        SELECT * FROM company c WHERE c.duns_company = p_duns_company; 
+	END IF;
+END$$
+
+-- Stored procedure eliminar datos en tabla company
+DROP PROCEDURE IF EXISTS `sp_delete_company`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_personal`(IN p_duns_company VARCHAR(15))
+BEGIN
+	DELETE FROM company c WHERE c.duns_company = p_duns_company;
+    SELECT 'Elemento eliminado exitosamente';
+END$$
+
+
+-- Triggers before insert tablas registro logs
+CREATE TRIGGER BEF_INS_personal_logs
+BEFORE INSERT ON personal
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "personal", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_INS_address_logs
+BEFORE INSERT ON address
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "address", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_INS_account_logs
+BEFORE INSERT ON account
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "account", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_INS_history_logs
+BEFORE INSERT ON history
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "history", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_INS_user_logs
+BEFORE INSERT ON user
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "user", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_INS_page_logs
+BEFORE INSERT ON page
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "page", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_INS_data_logs
+BEFORE INSERT ON data
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "data", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_INS_company_logs
+BEFORE INSERT ON company
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "company", "Insert", NOW(), USER(), DATABASE(), VERSION());
+
+-- Triggers before delete tablas registro logs
+CREATE TRIGGER BEF_DEL_personal_logs
+BEFORE DELETE ON personal
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "personal", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_DEL_address_logs
+BEFORE DELETE ON address
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "address", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_DEL_account_logs
+BEFORE DELETE ON account
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "account", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_DEL_history_logs
+BEFORE DELETE ON history
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "history", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_DEL_user_logs
+BEFORE DELETE ON user
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "user", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_DEL_page_logs
+BEFORE DELETE ON page
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "page", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_DEL_data_logs
+BEFORE DELETE ON data
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "data", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_DEL_company_logs
+BEFORE DELETE ON company
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "company", "Delete", NOW(), USER(), DATABASE(), VERSION());
+
+-- Triggers before update tablas registro logs
+CREATE TRIGGER BEF_UPD_personal_logs
+BEFORE UPDATE ON personal
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "personal", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_UPD_address_logs
+BEFORE UPDATE ON address
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "address", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_UPD_account_logs
+BEFORE UPDATE ON account
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "account", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_UPD_history_logs
+BEFORE UPDATE ON history
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "history", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_UPD_user_logs
+BEFORE UPDATE ON user
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "user", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_UPD_page_logs
+BEFORE UPDATE ON page
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "page", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_UPD_data_logs
+BEFORE UPDATE ON data
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "data", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+CREATE TRIGGER BEF_UPD_company_logs
+BEFORE UPDATE ON company
+FOR EACH ROW
+INSERT INTO logs VALUES (NULL, "company", "Update", NOW(), USER(), DATABASE(), VERSION());
+
+-- Triggers after insert tablas hacia backups
+CREATE TRIGGER AFT_INS_personal_bu_personal
+AFTER INSERT ON personal
+FOR EACH ROW
+INSERT INTO backup_personal VALUES (NOW(), NEW.id_personal, NEW.gender, NEW.user_first_name, NEW.user_last_name, NEW.age);
+
+CREATE TRIGGER AFT_INS_address_bu_address
+AFTER INSERT ON address
+FOR EACH ROW
+INSERT INTO backup_address VALUES (NOW(), NEW.ip_user, NEW.country_code, NEW.city, NEW.street);
+
+CREATE TRIGGER AFT_INS_account_bu_account
+AFTER INSERT ON account
+FOR EACH ROW
+INSERT INTO backup_account VALUES (NOW(), NEW.user_mail, NEW.user_password, NEW.register_account);
+
+CREATE TRIGGER AFT_INS_history_bu_history
+AFTER INSERT ON history
+FOR EACH ROW
+INSERT INTO backup_history VALUES (NOW(), NEW.id_history, NEW.person_history, NEW.name_page);
+
+CREATE TRIGGER AFT_INS_user_bu_user
+AFTER INSERT ON user
+FOR EACH ROW
+INSERT INTO backup_user VALUES (NOW(), NEW.id_user, NEW.user_mail, NEW.id_personal, NEW.ip_user, NEW.id_history);
+
+CREATE TRIGGER AFT_INS_page_bu_page
+AFTER INSERT ON page
+FOR EACH ROW
+INSERT INTO backup_page VALUES (NOW(), NEW.name_page, NEW.date_registered_page, NEW.info);
+
+CREATE TRIGGER AFT_INS_data_bu_data
+AFTER INSERT ON data
+FOR EACH ROW
+INSERT INTO backup_data VALUES (NOW(), NEW.register_data, NEW.db, NEW.id_user, NEW.date_data);
+
+CREATE TRIGGER AFT_INS_company_bu_company
+AFTER INSERT ON company
+FOR EACH ROW
+INSERT INTO backup_company VALUES (NOW(), NEW.duns_company, NEW.name_company, NEW.headquarters, NEW.register_data, NEW.requirement_purpose);
+
 
 -- Se insertan los datos en las tablas
 INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`,`age`) 
@@ -203,113 +563,3 @@ VALUES  ('04-413-3487','Jaxspan','Mibu',1,'vestibulum ante ipsum primis in fauci
 		('81-510-2753','Gigazoom','Gununganyar',7,'ultrices posuere cubilia curae nulla dapibus dolor vel est donec odio justo'),
 		('93-730-6330','Skinix','Jayapura',8,'lobortis convallis tortor risus dapibus augue vel accumsan tellus nisi eu'),
 		('98-385-2640','Youspan','Tambakmerak',3,'vel pede morbi porttitor lorem id ligula suspendisse ornare consequat');
-
--- Vista de la tabla user
-CREATE OR REPLACE VIEW user_view as
-	SELECT * 
-    FROM user;
--- Vista de nombre y fecha registrada de la pagina
-CREATE OR REPLACE VIEW page_view as 
-	SELECT name_page, date_registered_page 
-	FROM page;
--- Vista de nombre y apellido del usuario
-CREATE OR REPLACE VIEW personal_view as 
-	SELECT user_first_name, user_last_name 
-	FROM personal; 
--- Vista de duns, nombre y requerimiento de las empresas
-CREATE OR REPLACE VIEW company_view as 
-	SELECT duns_company, name_company, requirement_purpose 
-	FROM company;
--- Vista con join de user, account, history y address
-CREATE OR REPLACE VIEW join_view as
-	SELECT DISTINCT u.id_user, ac.user_mail, h.id_history, a.ip_user
-		FROM user u
-		INNER JOIN address a
-		ON u.ip_user = a.ip_user
-		INNER JOIN account ac
-		ON ac.user_mail = u.user_mail
-		INNER JOIN history h
-		ON h.id_history = u.id_history;
-    ;
-    
--- Funcion NoSQL calculadora de precio final para compra virtual
-DROP FUNCTION IF EXISTS `compra_virtual`;
-DELIMITER $$
-CREATE FUNCTION `compra_virtual`(precio INT) RETURNS VARCHAR(255)
-NO SQL
-BEGIN
-	DECLARE precio_final INT;
-    DECLARE iva FLOAT;
-    DECLARE impuesto_pais FLOAT;
-    SET impuesto_pais = precio * 0.30;
-    SET iva = precio * 0.21;
-    SET precio_final = round(precio + (impuesto_pais + iva));
-    IF (precio < 1) THEN
-		RETURN CONCAT('Se necesita un valor mayor a 1');
-    ELSE
-		RETURN CONCAT('Precio Final: ', precio_final);
-    END IF;
-END$$
-
--- Funcion SQL muestra gender
-DROP FUNCTION IF EXISTS `user_gender`;
-DELIMITER $$
-CREATE FUNCTION `user_gender`(name VARCHAR(20), last_name VARCHAR(20)) RETURNS VARCHAR(50)
-READS SQL DATA
-BEGIN
-	DECLARE gender_u VARCHAR(50);
-    SET gender_u = (SELECT gender FROM personal WHERE 
-					user_first_name IN (SELECT user_first_name FROM personal WHERE user_first_name = name) 
-						AND 
-					user_last_name IN (SELECT user_last_name FROM personal WHERE user_last_name = last_name)
-				);
-	IF isnull(gender_u) THEN  
-		RETURN CONCAT('Nombre o apellido invalido');
-	ELSE 
-	    RETURN CONCAT('Genero: ',gender_u);
-	END IF;
-END$$
-
-
--- Stored Procedure de data ordena campo con especificacion de asc or desc
-DROP PROCEDURE IF EXISTS `sp_get_data_ordered`;
-DELIMITER $$
-CREATE PROCEDURE `sp_get_data_ordered`(IN p_field VARCHAR(50), IN p_ord VARCHAR(20))
-BEGIN
-	IF p_field = '' THEN
-		SET @order_field = '';
-	ELSE
-        IF p_ord = '' THEN
-			SET @order_way = '';
-		ELSE
-			SET @order_way = CONCAT(' ', upper(p_ord));
-            SET @order_field = CONCAT('ORDER BY ', p_field);
-		END IF;
-	END IF;
-	SET @clausula = CONCAT('SELECT * FROM data ', @order_field, @order_way);
-    PREPARE runSQL FROM @clausula;
-    EXECUTE runSQL;
-    DEALLOCATE PREPARE runSQL;
-END$$
-
--- Stored procedure insertar datos en tabla company
-DROP PROCEDURE IF EXISTS `sp_insert_company`;
-DELIMITER $$
-CREATE PROCEDURE `sp_insert_company`(IN p_duns_company VARCHAR(15), IN p_name_company VARCHAR(50), IN p_headquarters VARCHAR(50), IN p_register_data INT, IN p_requirement_purpose VARCHAR(200))
-BEGIN
-	IF p_duns_company = '' OR p_name_company = '' OR p_headquarters = '' OR p_register_data = 0 OR p_requirement_purpose = '' THEN
-		SELECT 'ERROR: parametro faltante o invalido';
-	ELSE
-        INSERT INTO company (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
-        SELECT * FROM company c WHERE c.duns_company = p_duns_company; 
-	END IF;
-END$$
-
--- Stored procedure eliminar datos en tabla company
-DROP PROCEDURE IF EXISTS `sp_delete_company`;
-DELIMITER $$
-CREATE PROCEDURE `sp_delete_personal`(IN p_duns_company VARCHAR(15))
-BEGIN
-	DELETE FROM company c WHERE c.duns_company = p_duns_company;
-    SELECT 'Elemento eliminado exitosamente';
-END$$
