@@ -1,10 +1,14 @@
 
--- Se crea la base de datos y se posiciona en la misma
-DROP DATABASE IF EXISTS DB_WineHouse;
-CREATE DATABASE DB_WineHouse;
-USE DB_WineHouse;
+-- -------- DATA BASES -------- --
+-- Se crea la base de datos, el backup y se posiciona en la primera
+DROP DATABASE IF EXISTS db_winehouse;
+DROP DATABASE IF EXISTS backup_db_winehouse;
+CREATE DATABASE db_winehouse;
+CREATE DATABASE backup_db_winehouse;
+USE db_winehouse;
 
 
+-- -------- TABLES -------- --
 -- Creacion de tablas
 CREATE TABLE `logs`(
 	id_logs INT NOT NULL AUTO_INCREMENT,
@@ -73,74 +77,23 @@ CREATE TABLE `company`(
     CONSTRAINT PK_COMPANY PRIMARY KEY (duns_company)
 );
 
+
+-- -------- BACKUP TABLES -------- --
 -- Creacion de backups
-CREATE TABLE `backup_user`(
-	datetime_user DATETIME NOT NULL,
-	bu_id_user INT NOT NULL AUTO_INCREMENT,
-    bu_user_mail VARCHAR(50) NOT NULL,
-    bu_id_personal INT NOT NULL,
-    bu_ip_user VARCHAR(20) NOT NULL,
-    bu_id_history INT NOT NULL,
-    CONSTRAINT PK_USER PRIMARY KEY (bu_id_user)
-);
-CREATE TABLE `backup_personal`(
-	datetime_personal DATETIME NOT NULL,
-	bu_id_personal INT NOT NULL AUTO_INCREMENT,
-    gender VARCHAR(10) NOT NULL,
-	user_first_name VARCHAR(20) NOT NULL,
-    user_last_name VARCHAR(30) NOT NULL,
-    age INT NOT NULL,
-    CONSTRAINT PK_PERSONAL PRIMARY KEY (bu_id_personal)
-);
-CREATE TABLE `backup_account`(
-	datetime_account DATETIME NOT NULL,
-    bu_user_mail VARCHAR (50) NOT NULL,
-	user_password VARCHAR(50) NOT NULL,
-	register_account DATETIME NOT NULL,
-    CONSTRAINT PK_ACCOUNT PRIMARY KEY (bu_user_mail)
-);
-CREATE TABLE `backup_address`(
-	datetime_address DATETIME NOT NULL,
-    bu_ip_user VARCHAR(20) NOT NULL,
-	country_code VARCHAR(10) NOT NULL,
-    city VARCHAR(50) NOT NULL,
-    street VARCHAR (60) NOT NULL,
-	CONSTRAINT PK_ADDRESS PRIMARY KEY (bu_ip_user)
-);
-CREATE TABLE `backup_history`(
-	datetime_history DATETIME NOT NULL,
-	bu_id_history INT NOT NULL AUTO_INCREMENT,
-    person_history INT NOT NULL,
-    bu_name_page VARCHAR(50) NOT NULL,
-    CONSTRAINT PK_HISTORY PRIMARY KEY (bu_id_history)
-);
-CREATE TABLE `backup_page`(
-	datetime_page DATETIME NOT NULL,
-    bu_name_page VARCHAR(50) NOT NULL,
-	date_registered_page DATETIME NOT NULL,
-    info TEXT NOT NULL,
-	CONSTRAINT PK_PAGE PRIMARY KEY (bu_name_page)
-);
-CREATE TABLE `backup_data`(
-	datetime_data DATETIME NOT NULL,
-	bu_register_data INT NOT NULL AUTO_INCREMENT,
-    db INT NOT NULL,
-    bu_id_user INT NOT NULL,
-	date_data DATETIME NOT NULL,
-	CONSTRAINT PK_DATA PRIMARY KEY (bu_register_data)
-);
-CREATE TABLE `backup_company`(
-	datetime_company DATETIME NOT NULL,
-	bu_duns_company VARCHAR(15),
-    name_company VARCHAR(50),
-    headquarters VARCHAR(50),
-	bu_register_data INT NOT NULL,
-    requirement_purpose VARCHAR(200),
-    CONSTRAINT PK_COMPANY PRIMARY KEY (bu_duns_company)
-);
+USE backup_db_winehouse;
+CREATE TABLE `backup_user` LIKE db_winehouse.user;
+CREATE TABLE `backup_personal` LIKE db_winehouse.personal;
+CREATE TABLE `backup_account` LIKE db_winehouse.account;
+CREATE TABLE `backup_address` LIKE db_winehouse.address;
+CREATE TABLE `backup_history` LIKE db_winehouse.history;
+CREATE TABLE `backup_page` LIKE db_winehouse.page;
+CREATE TABLE `backup_data` LIKE db_winehouse.data;
+CREATE TABLE `backup_company` LIKE db_winehouse.company;
 
 
+-- -------- ALTERS -------- --
 -- Se vinculan las tablas mediante Foreign Key
+USE db_winehouse;
 ALTER TABLE user
 	ADD FOREIGN KEY FK_USER_ADDRESS (ip_user) REFERENCES address (ip_user),
 	ADD FOREIGN KEY FK_USER_ACCOUNT (user_mail) REFERENCES account (user_mail),
@@ -153,6 +106,8 @@ ALTER TABLE data
 ALTER TABLE company
 	ADD FOREIGN KEY FK_COMPANY_DATA (register_data) REFERENCES data (register_data);
 
+
+-- -------- VIEWS -------- --
 -- Vista de la tabla logs
 CREATE OR REPLACE VIEW logs_view as
 	SELECT id_logs, table_logs, dml, registered_logs, user
@@ -186,89 +141,290 @@ CREATE OR REPLACE VIEW join_view as
     ;
 
 
--- Funcion NoSQL calculadora de precio final para compra virtual
-DROP FUNCTION IF EXISTS `compra_virtual`;
+-- -------- FUNCTIONS -------- --
+-- Funcion SQL muestra id mediante nombre y apellido de personal
+DROP FUNCTION IF EXISTS `user_id`;
 DELIMITER $$
-CREATE FUNCTION `compra_virtual`(precio INT) RETURNS VARCHAR(255)
-NO SQL
-BEGIN
-	DECLARE precio_final INT;
-    DECLARE iva FLOAT;
-    DECLARE impuesto_pais FLOAT;
-    SET impuesto_pais = precio * 0.30;
-    SET iva = precio * 0.21;
-    SET precio_final = round(precio + (impuesto_pais + iva));
-    IF (precio < 1) THEN
-		RETURN CONCAT('Se necesita un valor mayor a 1');
-    ELSE
-		RETURN CONCAT('Precio Final: ', precio_final);
-    END IF;
-END$$
-
--- Funcion SQL muestra gender
-DROP FUNCTION IF EXISTS `user_gender`;
-DELIMITER $$
-CREATE FUNCTION `user_gender`(name VARCHAR(20), last_name VARCHAR(20)) RETURNS VARCHAR(50)
+CREATE FUNCTION `user_id`(name VARCHAR(20), last_name VARCHAR(20)) RETURNS VARCHAR(50)
 READS SQL DATA
 BEGIN
-	DECLARE gender_u VARCHAR(50);
-    SET gender_u = (SELECT gender FROM personal WHERE 
+	DECLARE id_u VARCHAR(50);
+    SET id_u = (SELECT id_personal FROM personal WHERE 
 					user_first_name IN (SELECT user_first_name FROM personal WHERE user_first_name = name) 
 						AND 
 					user_last_name IN (SELECT user_last_name FROM personal WHERE user_last_name = last_name)
 				);
-	IF isnull(gender_u) THEN  
+	IF isnull(id_u) THEN  
 		RETURN CONCAT('Nombre o apellido invalido');
 	ELSE 
-	    RETURN CONCAT('Genero: ',gender_u);
+	    RETURN CONCAT('ID usuario: ',id_u);
+	END IF;
+END$$
+
+-- Funcion SQL muestra duns mediante nombre de empresa
+DROP FUNCTION IF EXISTS `company_duns`;
+DELIMITER $$
+CREATE FUNCTION `company_duns`(name VARCHAR(20)) RETURNS VARCHAR(50)
+READS SQL DATA
+BEGIN
+	DECLARE duns_c VARCHAR(50);
+    SET duns_c = (SELECT duns_company FROM company WHERE 
+					name_company IN (SELECT name_company FROM company WHERE name_company = name) 
+				);
+	IF isnull(duns_c) THEN  
+		RETURN CONCAT('Nombre invalido');
+	ELSE 
+	    RETURN CONCAT('duns empresa: ',duns_c);
+	END IF;
+END$$
+
+-- Funcion SQL muestra descripcion mediante nombre de pagina
+DROP FUNCTION IF EXISTS `page_name_page`;
+DELIMITER $$
+CREATE FUNCTION `page_name_page`(name VARCHAR(20)) RETURNS TEXT
+READS SQL DATA
+BEGIN
+	DECLARE info_p TEXT;
+    SET info_p = (SELECT info FROM page WHERE 
+					name_page IN (SELECT name_page FROM page WHERE name_page = name) 
+				);
+	IF isnull(info_p) THEN  
+		RETURN CONCAT('Nombre invalido');
+	ELSE 
+	    RETURN CONCAT('Descripcion empresa: ',info_p);
+	END IF;
+END$$
+
+-- Funcion SQL muestra db correspondiente mediante id de usuario
+DROP FUNCTION IF EXISTS `data_db`;
+DELIMITER $$
+CREATE FUNCTION `data_db`(id_u INT) RETURNS VARCHAR(50)
+READS SQL DATA
+BEGIN
+	DECLARE db_d INT;
+    SET db_d = (SELECT db FROM data WHERE 
+					id_user IN (SELECT id_user FROM user WHERE id_user = id_u) 
+				);
+	IF isnull(db_d) THEN  
+		RETURN CONCAT('Id invalido');
+	ELSE 
+	    RETURN CONCAT('Base de datos: ', db_d);
+	END IF;
+END$$
+
+-- Funcion SQL muestra cantidad de sentencias DML mediante nombre de usuario, sentencia y tabla
+DROP FUNCTION IF EXISTS `logs_id`;
+DELIMITER $$
+CREATE FUNCTION `logs_id`(p_user VARCHAR(50), p_dml VARCHAR(20), p_table_logs VARCHAR(20)) RETURNS VARCHAR(50)
+READS SQL DATA
+BEGIN
+	DECLARE id_l INT;
+    SET id_l = (SELECT COUNT(id_logs) FROM logs WHERE 
+					user IN (SELECT user FROM logs WHERE user = p_user) 
+										AND
+				    dml IN (SELECT dml FROM logs WHERE dml = p_dml)
+										AND
+					table_logs IN (SELECT table_logs FROM logs WHERE table_logs = p_table_logs)
+				);
+	IF isnull(id_l) THEN  
+		RETURN CONCAT('User, sentencia o tabla invalido');
+	ELSE 
+	    RETURN CONCAT('Cantidad de movimientos: ', id_l);
 	END IF;
 END$$
 
 
--- Stored Procedure de data ordena campo con especificacion de asc or desc
-DROP PROCEDURE IF EXISTS `sp_get_data_ordered`;
+-- -------- PROCEDURES -------- --
+-- Stored Procedure ordena campo de tabla con especificacion de asc or desc
+DROP PROCEDURE IF EXISTS `sp_get_order`;
 DELIMITER $$
-CREATE PROCEDURE `sp_get_data_ordered`(IN p_field VARCHAR(50), IN p_ord VARCHAR(20))
+CREATE PROCEDURE `sp_get_order`(IN p_table VARCHAR(50), IN p_field VARCHAR(50), IN p_ord VARCHAR(20))
 BEGIN
-	IF p_field = '' THEN
-		SET @order_field = '';
+	IF p_table = '' THEN
+		SELECT 'Seleccione tabla' ERROR;
 	ELSE
-        IF p_ord = '' THEN
-			SET @order_way = '';
+		SET @order_table = CONCAT(' ', p_table);
+		IF p_field = '' THEN
+			SET @order_field = '';
 		ELSE
-			SET @order_way = CONCAT(' ', upper(p_ord));
-            SET @order_field = CONCAT('ORDER BY ', p_field);
+			IF p_ord = '' THEN
+				SET @order_way = '';
+			ELSE
+				SET @order_field = CONCAT(' ORDER BY ', p_field);
+                SET @order_way = CONCAT(' ', upper(p_ord));
+			END IF;
 		END IF;
-	END IF;
-	SET @clausula = CONCAT('SELECT * FROM data ', @order_field, @order_way);
+    END IF;
+	SET @clausula = CONCAT('SELECT * FROM ', @order_table, @order_field, @order_way);
     PREPARE runSQL FROM @clausula;
     EXECUTE runSQL;
     DEALLOCATE PREPARE runSQL;
 END$$
 
--- Stored procedure insertar datos en tabla company
+-- Stored procedure insertar datos en tablas --
+DROP PROCEDURE IF EXISTS `sp_insert_address`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_address`(IN p_ip_user VARCHAR(20), IN p_country_code VARCHAR(50), IN p_city VARCHAR(50), IN p_street VARCHAR(50))
+BEGIN
+	IF p_ip_user = '' OR p_country_code = '' OR p_city = '' OR p_street = '' THEN
+		SELECT 'Parametro faltante o invalido' ERROR;
+	ELSE
+        INSERT INTO address (`ip_user`,`country_code`,`city`,`street`) VALUES (p_ip_user, p_country_code, p_city, p_street);
+        SELECT * FROM address a WHERE a.ip_user = p_ip_user; 
+	END IF;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_insert_history`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_history`(IN p_person_history INT, IN p_name_page VARCHAR(50))
+BEGIN
+	IF p_person_history = 0 OR p_name_page = '' THEN
+		SELECT 'Parametro faltante o invalido' ERROR;
+	ELSE
+        INSERT INTO history (`id_history`,`person_history`,`name_page`) VALUES (NULL, p_person_history, p_name_page);
+        SELECT MAX(id_history) id, person_history, name_page FROM history;
+	END IF;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_insert_page`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_page`(IN p_name_page VARCHAR(50), IN p_date_registered_page DATETIME, IN p_info TEXT)
+BEGIN
+	IF p_name_page = '' OR p_date_registered_page = '' OR p_info = '' THEN
+		SELECT 'Parametro faltante o invalido' ERROR;
+	ELSE
+        INSERT INTO page (`name_page`,`date_registered_page`,`info`) VALUES (p_name_page, p_date_registered_page, p_info);
+        SELECT * FROM page p WHERE p.name_page = p_name_page; 
+	END IF;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_insert_data`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_data`(IN p_db INT, IN p_id_user INT)
+BEGIN
+	IF p_db = '' OR p_id_user = '' THEN
+		SELECT 'Parametro faltante o invalido' ERROR;
+	ELSE
+        INSERT INTO data (`register_data`,`db`,`id_user`,`date_data`) VALUES (NULL, p_db, p_id_user, NULL);
+        SELECT MAX(register_data) id, db, id_user, date_data date FROM data;
+	END IF;
+END$$
+
 DROP PROCEDURE IF EXISTS `sp_insert_company`;
 DELIMITER $$
 CREATE PROCEDURE `sp_insert_company`(IN p_duns_company VARCHAR(15), IN p_name_company VARCHAR(50), IN p_headquarters VARCHAR(50), IN p_register_data INT, IN p_requirement_purpose VARCHAR(200))
 BEGIN
 	IF p_duns_company = '' OR p_name_company = '' OR p_headquarters = '' OR p_register_data = 0 OR p_requirement_purpose = '' THEN
-		SELECT 'ERROR: parametro faltante o invalido';
+		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
         INSERT INTO company (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
         SELECT * FROM company c WHERE c.duns_company = p_duns_company; 
 	END IF;
 END$$
 
--- Stored procedure eliminar datos en tabla company
+DROP PROCEDURE IF EXISTS `sp_insert_user`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_user`(IN p_user_mail VARCHAR(50), IN p_id_personal INT, IN p_ip_user VARCHAR(20), IN p_id_history INT)
+BEGIN
+	IF p_user_mail = '' OR p_id_personal = 0 OR p_ip_user = '' OR p_id_history = 0 THEN
+		SELECT 'Parametro faltante o invalido' ERROR;
+	ELSE
+        INSERT INTO user (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
+        SELECT MAX(id_user) id, user_mail mail, id_personal, ip_user ip, id_history FROM user;
+	END IF;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_insert_personal`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_personal`(IN p_gender VARCHAR(10), IN p_first_name VARCHAR(50), IN p_last_name VARCHAR(30), IN p_age INT)
+BEGIN
+	IF p_gender = '' OR p_first_name = '' OR p_last_name = '' OR p_age = 0  THEN
+		SELECT 'Parametro faltante o invalido' ERROR;
+	ELSE
+        INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`,`age`) VALUES (NULL, p_gender, p_first_name, p_last_name, p_age);
+        SELECT MAX(id_personal) id, gender, user_first_name first_name, user_last_name last_name, age FROM personal;
+	END IF;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_insert_account`;
+DELIMITER $$
+CREATE PROCEDURE `sp_insert_account`(IN p_user_mail VARCHAR(50), IN p_user_password VARCHAR(50), IN p_register_account DATETIME)
+BEGIN
+	IF p_user_mail = '' OR p_user_password = '' OR p_register_account = '' THEN
+		SELECT 'Parametro faltante o invalido' ERROR;
+	ELSE
+        INSERT INTO account (`user_mail`,`user_password`,`register_account`) VALUES (p_user_mail, p_user_password, p_register_account);
+        SELECT * FROM account a WHERE a.user_mail = p_user_mail; 
+	END IF;
+END$$
+
+-- Stored procedure eliminar datos en tablas
+DROP PROCEDURE IF EXISTS `sp_delete_address`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_address`(IN p_ip_user VARCHAR(15))
+BEGIN
+	DELETE FROM user u WHERE u.ip_user = p_ip_user;
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_delete_history`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_history`(IN p_id_history VARCHAR(15))
+BEGIN
+	DELETE FROM history h WHERE h.id_history = p_id_history;
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_delete_page`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_page`(IN p_name_page VARCHAR(15))
+BEGIN
+	DELETE FROM page p WHERE p.name_page = p_name_page;
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_delete_data`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_data`(IN p_register_data VARCHAR(15))
+BEGIN
+	DELETE FROM data d WHERE d.register_data = p_register_data;
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
+END$$
+
 DROP PROCEDURE IF EXISTS `sp_delete_company`;
 DELIMITER $$
-CREATE PROCEDURE `sp_delete_personal`(IN p_duns_company VARCHAR(15))
+CREATE PROCEDURE `sp_delete_company`(IN p_duns_company VARCHAR(15))
 BEGIN
 	DELETE FROM company c WHERE c.duns_company = p_duns_company;
-    SELECT 'Elemento eliminado exitosamente';
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_delete_personal`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_personal`(IN p_id_personal VARCHAR(15))
+BEGIN
+	DELETE FROM personal p WHERE p.id_personal = p_id_personal;
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_delete_user`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_user`(IN p_id_user VARCHAR(15))
+BEGIN
+	DELETE FROM user u WHERE u.id_user = p_id_user;
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_delete_account`;
+DELIMITER $$
+CREATE PROCEDURE `sp_delete_account`(IN p_user_mail VARCHAR(15))
+BEGIN
+	DELETE FROM account a WHERE a.user_mail = p_user_mail;
+    SELECT 'Elemento eliminado exitosamente' EXITOSO;
 END$$
 
 
+-- -------- TRIGGERS -------- --
 -- Triggers before insert tablas registro logs
 CREATE TRIGGER BEF_INS_personal_logs
 BEFORE INSERT ON personal
@@ -396,44 +552,45 @@ INSERT INTO logs VALUES (NULL, "company", "Update", NOW(), USER(), DATABASE(), V
 CREATE TRIGGER AFT_INS_personal_bu_personal
 AFTER INSERT ON personal
 FOR EACH ROW
-INSERT INTO backup_personal VALUES (NOW(), NEW.id_personal, NEW.gender, NEW.user_first_name, NEW.user_last_name, NEW.age);
+INSERT INTO backup_db_winehouse.backup_personal VALUES (NEW.id_personal, NEW.gender, NEW.user_first_name, NEW.user_last_name, NEW.age);
 
 CREATE TRIGGER AFT_INS_address_bu_address
 AFTER INSERT ON address
 FOR EACH ROW
-INSERT INTO backup_address VALUES (NOW(), NEW.ip_user, NEW.country_code, NEW.city, NEW.street);
+INSERT INTO backup_db_winehouse.backup_address VALUES (NEW.ip_user, NEW.country_code, NEW.city, NEW.street);
 
 CREATE TRIGGER AFT_INS_account_bu_account
 AFTER INSERT ON account
 FOR EACH ROW
-INSERT INTO backup_account VALUES (NOW(), NEW.user_mail, NEW.user_password, NEW.register_account);
+INSERT INTO backup_db_winehouse.backup_account VALUES (NEW.user_mail, NEW.user_password, NEW.register_account);
 
 CREATE TRIGGER AFT_INS_history_bu_history
 AFTER INSERT ON history
 FOR EACH ROW
-INSERT INTO backup_history VALUES (NOW(), NEW.id_history, NEW.person_history, NEW.name_page);
+INSERT INTO backup_db_winehouse.backup_history VALUES (NEW.id_history, NEW.person_history, NEW.name_page);
 
 CREATE TRIGGER AFT_INS_user_bu_user
 AFTER INSERT ON user
 FOR EACH ROW
-INSERT INTO backup_user VALUES (NOW(), NEW.id_user, NEW.user_mail, NEW.id_personal, NEW.ip_user, NEW.id_history);
+INSERT INTO backup_db_winehouse.backup_user VALUES (NEW.id_user, NEW.user_mail, NEW.id_personal, NEW.ip_user, NEW.id_history);
 
 CREATE TRIGGER AFT_INS_page_bu_page
 AFTER INSERT ON page
 FOR EACH ROW
-INSERT INTO backup_page VALUES (NOW(), NEW.name_page, NEW.date_registered_page, NEW.info);
+INSERT INTO backup_db_winehouse.backup_page VALUES (NEW.name_page, NEW.date_registered_page, NEW.info);
 
 CREATE TRIGGER AFT_INS_data_bu_data
 AFTER INSERT ON data
 FOR EACH ROW
-INSERT INTO backup_data VALUES (NOW(), NEW.register_data, NEW.db, NEW.id_user, NEW.date_data);
+INSERT INTO backup_db_winehouse.backup_data VALUES (NEW.register_data, NEW.db, NEW.id_user, NEW.date_data);
 
 CREATE TRIGGER AFT_INS_company_bu_company
 AFTER INSERT ON company
 FOR EACH ROW
-INSERT INTO backup_company VALUES (NOW(), NEW.duns_company, NEW.name_company, NEW.headquarters, NEW.register_data, NEW.requirement_purpose);
+INSERT INTO backup_db_winehouse.backup_company VALUES (NEW.duns_company, NEW.name_company, NEW.headquarters, NEW.register_data, NEW.requirement_purpose);
 
 
+-- -------- INSERTS -------- --
 -- Se insertan los datos en las tablas
 INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`,`age`) 
 VALUES  (null,'Female','Jaimie','Dufton', 30),
@@ -532,21 +689,21 @@ VALUES  (null,'abelison3@hc360.com',2,'199.52.19.14',2),
 		(null,'hdoche9@diigo.com',3,'237.155.207.205',3),
 		(null,'twetternd@1und1.de',8,'113.196.201.118',8);
 INSERT INTO data (`register_data`,`db`,`id_user`,`date_data`) 
-VALUES  (1,1,1,'2021-11-02 16:14:08'),
-		(2,1,2,'2022-02-08 03:28:34'),
-		(3,1,3,'2021-09-07 18:53:41'),
-		(4,1,4,'2022-05-26 01:54:42'),
-		(5,1,5,'2021-10-01 11:59:15'),
-		(6,1,6,'2022-02-24 08:56:40'),
-		(7,1,7,'2022-03-14 03:45:43'),
-		(8,2,8,'2022-03-14 13:21:06'),
-		(9,2,9,'2021-12-26 16:18:36'),
-		(10,2,10,'2022-04-09 21:10:50'),
-		(11,2,11,'2021-07-20 23:10:01'),
-		(12,2,12,'2022-04-17 02:25:04'),
-		(13,2,13,'2021-10-24 11:31:37'),
-		(14,2,14,'2022-02-28 17:45:37'),
-		(15,2,15,'2022-05-19 08:34:54');
+VALUES  (1,1,1,NOW()),
+		(2,1,2,NOW()),
+		(3,1,3,NOW()),
+		(4,1,4,NOW()),
+		(5,1,5,NOW()),
+		(6,1,6,NOW()),
+		(7,1,7,NOW()),
+		(8,2,8,NOW()),
+		(9,2,9,NOW()),
+		(10,2,10,NOW()),
+		(11,2,11,NOW()),
+		(12,2,12,NOW()),
+		(13,2,13,NOW()),
+		(14,2,14,NOW()),
+		(15,2,15,NOW());
 INSERT INTO company (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) 
 VALUES  ('04-413-3487','Jaxspan','Mibu',1,'vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere'),
 		('07-679-8593','Realpoint','Podeebrady',1,'blandit mi in porttitor pede justo eu massa donec dapibus duis at'),
