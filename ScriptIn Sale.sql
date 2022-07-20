@@ -8,6 +8,16 @@ CREATE DATABASE backup_db_winehouse;
 USE db_winehouse;
 
 
+-- -------- USUARIOS -------- --
+-- Creacion de usuarios con contraseña
+CREATE USER tomas@localhost IDENTIFIED BY 'coder2022';
+CREATE USER diego@localhost IDENTIFIED BY 'coder2022';
+-- Otorgar permisos a leer las tablas de la db db_winehouse al usuario tomas
+GRANT SELECT ON db_winehouse.* TO tomas@localhost;
+-- Otorga permisos a leer, insertar y modificar las tablas de la db db_winehouse al usuario sergio
+GRANT SELECT, INSERT, UPDATE ON db_winehouse.* TO diego@localhost;
+
+
 -- -------- TABLES -------- --
 -- Creacion de tablas
 CREATE TABLE `logs`(
@@ -16,7 +26,7 @@ CREATE TABLE `logs`(
     dml VARCHAR(20),
 	registered_logs DATETIME,
     user VARCHAR(50),
-    db VARCHAR(100),
+    db VARCHAR(20),
     version VARCHAR(20),
     CONSTRAINT PK_LOGS PRIMARY KEY (id_logs)
 );
@@ -46,7 +56,7 @@ CREATE TABLE `address`(
     ip_user VARCHAR(20) NOT NULL,
 	country_code VARCHAR(10) NOT NULL,
     city VARCHAR(50) NOT NULL,
-    street VARCHAR (60) NOT NULL,
+    street VARCHAR(60) NOT NULL,
 	CONSTRAINT PK_ADDRESS PRIMARY KEY (ip_user)
 );
 CREATE TABLE `history`(
@@ -73,7 +83,7 @@ CREATE TABLE `company`(
     name_company VARCHAR(50),
     headquarters VARCHAR(50),
 	register_data INT NOT NULL,
-    requirement_purpose VARCHAR(200),
+    requirement_purpose TEXT,
     CONSTRAINT PK_COMPANY PRIMARY KEY (duns_company)
 );
 
@@ -179,9 +189,9 @@ BEGIN
 END$$
 
 -- Funcion SQL muestra descripcion mediante nombre de pagina
-DROP FUNCTION IF EXISTS `page_name_page`;
+DROP FUNCTION IF EXISTS `page_info`;
 DELIMITER $$
-CREATE FUNCTION `page_name_page`(name VARCHAR(20)) RETURNS TEXT
+CREATE FUNCTION `page_info`(name VARCHAR(20)) RETURNS TEXT
 READS SQL DATA
 BEGIN
 	DECLARE info_p TEXT;
@@ -264,96 +274,131 @@ END$$
 -- Stored procedure insertar datos en tablas --
 DROP PROCEDURE IF EXISTS `sp_insert_address`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_address`(IN p_ip_user VARCHAR(20), IN p_country_code VARCHAR(50), IN p_city VARCHAR(50), IN p_street VARCHAR(50))
+CREATE PROCEDURE `sp_insert_address`(
+	IN p_ip_user VARCHAR(20), 
+    IN p_country_code VARCHAR(50), 
+    IN p_city VARCHAR(50), 
+    IN p_street VARCHAR(50))
 BEGIN
 	IF p_ip_user = '' OR p_country_code = '' OR p_city = '' OR p_street = '' THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO address (`ip_user`,`country_code`,`city`,`street`) VALUES (p_ip_user, p_country_code, p_city, p_street);
+        INSERT INTO address (`ip_user`,`country_code`,`city`,`street`) 
+        VALUES (p_ip_user, p_country_code, p_city, p_street);
         SELECT * FROM address a WHERE a.ip_user = p_ip_user; 
 	END IF;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_insert_history`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_history`(IN p_person_history INT, IN p_name_page VARCHAR(50))
+CREATE PROCEDURE `sp_insert_history`(
+	IN p_person_history INT, 
+    IN p_name_page VARCHAR(50))
 BEGIN
 	IF p_person_history = 0 OR p_name_page = '' THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO history (`id_history`,`person_history`,`name_page`) VALUES (NULL, p_person_history, p_name_page);
+        INSERT INTO history (`id_history`,`person_history`,`name_page`) 
+        VALUES (NULL, p_person_history, p_name_page);
         SELECT MAX(id_history) id, person_history, name_page FROM history;
 	END IF;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_insert_page`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_page`(IN p_name_page VARCHAR(50), IN p_date_registered_page DATETIME, IN p_info TEXT)
+CREATE PROCEDURE `sp_insert_page`(
+	IN p_name_page VARCHAR(50), 
+    IN p_date_registered_page DATETIME, 
+    IN p_info TEXT)
 BEGIN
 	IF p_name_page = '' OR p_date_registered_page = '' OR p_info = '' THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO page (`name_page`,`date_registered_page`,`info`) VALUES (p_name_page, p_date_registered_page, p_info);
+        INSERT INTO page (`name_page`,`date_registered_page`,`info`) 
+        VALUES (p_name_page, p_date_registered_page, p_info);
         SELECT * FROM page p WHERE p.name_page = p_name_page; 
 	END IF;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_insert_data`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_data`(IN p_db INT, IN p_id_user INT)
+CREATE PROCEDURE `sp_insert_data`(
+	IN p_db INT, 
+    IN p_id_user INT)
 BEGIN
 	IF p_db = '' OR p_id_user = '' THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO data (`register_data`,`db`,`id_user`,`date_data`) VALUES (NULL, p_db, p_id_user, NULL);
+        INSERT INTO data (`register_data`,`db`,`id_user`,`date_data`) 
+        VALUES (NULL, p_db, p_id_user, NULL);
         SELECT MAX(register_data) id, db, id_user, date_data date FROM data;
 	END IF;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_insert_company`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_company`(IN p_duns_company VARCHAR(15), IN p_name_company VARCHAR(50), IN p_headquarters VARCHAR(50), IN p_register_data INT, IN p_requirement_purpose VARCHAR(200))
+CREATE PROCEDURE `sp_insert_company`(
+	IN p_duns_company VARCHAR(15), 
+    IN p_name_company VARCHAR(50), 
+    IN p_headquarters VARCHAR(50), 
+    IN p_register_data INT, 
+    IN p_requirement_purpose VARCHAR(200))
 BEGIN
 	IF p_duns_company = '' OR p_name_company = '' OR p_headquarters = '' OR p_register_data = 0 OR p_requirement_purpose = '' THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO company (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
+        INSERT INTO company (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) 
+        VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
         SELECT * FROM company c WHERE c.duns_company = p_duns_company; 
 	END IF;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_insert_user`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_user`(IN p_user_mail VARCHAR(50), IN p_id_personal INT, IN p_ip_user VARCHAR(20), IN p_id_history INT)
+CREATE PROCEDURE `sp_insert_user`(
+	IN p_user_mail VARCHAR(50), 
+    IN p_id_personal INT, 
+    IN p_ip_user VARCHAR(20), 
+    IN p_id_history INT)
 BEGIN
 	IF p_user_mail = '' OR p_id_personal = 0 OR p_ip_user = '' OR p_id_history = 0 THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO user (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
+        INSERT INTO user (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) 
+        VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
         SELECT MAX(id_user) id, user_mail mail, id_personal, ip_user ip, id_history FROM user;
 	END IF;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_insert_personal`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_personal`(IN p_gender VARCHAR(10), IN p_first_name VARCHAR(50), IN p_last_name VARCHAR(30), IN p_age INT)
+CREATE PROCEDURE `sp_insert_personal`(
+	IN p_gender VARCHAR(10), 
+    IN p_first_name VARCHAR(50), 
+    IN p_last_name VARCHAR(30), 
+    IN p_age INT)
 BEGIN
 	IF p_gender = '' OR p_first_name = '' OR p_last_name = '' OR p_age = 0  THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`,`age`) VALUES (NULL, p_gender, p_first_name, p_last_name, p_age);
+        INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`,`age`) 
+        VALUES (NULL, p_gender, p_first_name, p_last_name, p_age);
         SELECT MAX(id_personal) id, gender, user_first_name first_name, user_last_name last_name, age FROM personal;
 	END IF;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_insert_account`;
 DELIMITER $$
-CREATE PROCEDURE `sp_insert_account`(IN p_user_mail VARCHAR(50), IN p_user_password VARCHAR(50), IN p_register_account DATETIME)
+CREATE PROCEDURE `sp_insert_account`(
+	IN p_user_mail VARCHAR(50), 
+    IN p_user_password VARCHAR(50), 
+    IN p_register_account DATETIME)
 BEGIN
 	IF p_user_mail = '' OR p_user_password = '' OR p_register_account = '' THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO account (`user_mail`,`user_password`,`register_account`) VALUES (p_user_mail, p_user_password, p_register_account);
+        INSERT INTO account (`user_mail`,`user_password`,`register_account`) 
+        VALUES (p_user_mail, p_user_password, p_register_account);
         SELECT * FROM account a WHERE a.user_mail = p_user_mail; 
 	END IF;
 END$$
