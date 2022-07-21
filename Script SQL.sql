@@ -6,10 +6,13 @@ DROP DATABASE IF EXISTS backup_db_winehouse;
 CREATE DATABASE db_winehouse;
 CREATE DATABASE backup_db_winehouse;
 USE db_winehouse;
+SET AUTOCOMMIT = 1;
 
 
--- -------- USUARIOS -------- --
+-- -------- USERS -------- --
 -- Creacion de usuarios con contraseña
+DROP USER IF EXISTS tomas@localhost; 
+DROP USER IF EXISTS diego@localhost;
 CREATE USER tomas@localhost IDENTIFIED BY 'coder2022';
 CREATE USER diego@localhost IDENTIFIED BY 'coder2022';
 -- Otorgar permisos a leer las tablas de la db db_winehouse al usuario tomas
@@ -629,6 +632,7 @@ AFTER INSERT ON data
 FOR EACH ROW
 INSERT INTO backup_db_winehouse.backup_data VALUES (NEW.register_data, NEW.db, NEW.id_user, NEW.date_data);
 
+
 CREATE TRIGGER AFT_INS_company_bu_company
 AFTER INSERT ON company
 FOR EACH ROW
@@ -765,3 +769,40 @@ VALUES  ('04-413-3487','Jaxspan','Mibu',1,'vestibulum ante ipsum primis in fauci
 		('81-510-2753','Gigazoom','Gununganyar',7,'ultrices posuere cubilia curae nulla dapibus dolor vel est donec odio justo'),
 		('93-730-6330','Skinix','Jayapura',8,'lobortis convallis tortor risus dapibus augue vel accumsan tellus nisi eu'),
 		('98-385-2640','Youspan','Tambakmerak',3,'vel pede morbi porttitor lorem id ligula suspendisse ornare consequat');
+
+
+-- -------- TRANSACTION -------- --
+#Anulacion de autocommit
+SET AUTOCOMMIT = 0;
+SELECT @@autocommit;
+#Eliminacion de datos tabla company
+START TRANSACTION;
+SAVEPOINT INITIAL_DELETE;
+	DELETE FROM company WHERE duns_company = '93-730-6330';
+	DELETE FROM company WHERE name_company = 'Youspan';
+#Reinsercion de datos eliminados tabla company
+#SAVEPOINT REINSERT;
+#	INSERT INTO company 
+#    VALUES ('93-730-6330','Skinix','Jayapura',8,'lobortis convallis tortor risus dapibus augue vel accumsan tellus nisi eu'),
+#		    ('98-385-2640','Youspan','Tambakmerak',3,'vel pede morbi porttitor lorem id ligula suspendisse ornare consequat');
+SAVEPOINT FINAL_DELETE;
+# ROLLBACK; Segunda opcion en caso de eliminar los datos y no haber hecho el commit
+COMMIT;
+#Insercion de datos tabla personal
+START TRANSACTION;
+SAVEPOINT INITIAL_INSERT;
+	INSERT INTO personal 
+    VALUES (null, 'Male', 'Dominik', 'Blakemore',18),
+		   (null, 'Female', 'Sofia', 'Pallaske', 46),
+		   (null, 'Female', 'Shena', 'Villaron', 27),
+		   (null, 'Female', 'Eugenia', 'Denyer', 34);
+SAVEPOINT MIDDLE;
+	INSERT INTO personal 
+    VALUES (null, 'Female', 'Martynne', 'Incogna', 50),
+		   (null, 'Female', 'Anabelle', 'FitzGibbon', 16),
+		   (null, 'Male', 'Otto', 'Kingcote', 14),
+		   (null, 'Male', 'Decca', 'Vennings', 25);
+SAVEPOINT FINAL_INSERT;
+# RELEASE SAVEPOINT MIDDLE; Borrar el savepoint del medio
+# ROLLBACK TO INITIAL_INSERT; Volver al inicio de la transaccion
+COMMIT;
