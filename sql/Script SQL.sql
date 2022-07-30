@@ -1,10 +1,8 @@
 
 -- -------- DATA BASES -------- --
--- Se crea la base de datos, el backup y se posiciona en la primera
+-- Se crea la base de datos y se posiciona en la misma
 DROP DATABASE IF EXISTS db_winehouse;
-DROP DATABASE IF EXISTS backup_db_winehouse;
 CREATE DATABASE db_winehouse;
-CREATE DATABASE backup_db_winehouse;
 USE db_winehouse;
 SET AUTOCOMMIT = 1;
 
@@ -89,19 +87,6 @@ CREATE TABLE `company`(
     requirement_purpose TEXT,
     CONSTRAINT PK_COMPANY PRIMARY KEY (duns_company)
 );
-
-
--- -------- BACKUP TABLES -------- --
--- Creacion de backups
-USE backup_db_winehouse;
-CREATE TABLE `backup_user` LIKE db_winehouse.user;
-CREATE TABLE `backup_personal` LIKE db_winehouse.personal;
-CREATE TABLE `backup_account` LIKE db_winehouse.account;
-CREATE TABLE `backup_address` LIKE db_winehouse.address;
-CREATE TABLE `backup_history` LIKE db_winehouse.history;
-CREATE TABLE `backup_page` LIKE db_winehouse.page;
-CREATE TABLE `backup_data` LIKE db_winehouse.data;
-CREATE TABLE `backup_company` LIKE db_winehouse.company;
 
 
 -- -------- ALTERS -------- --
@@ -596,47 +581,6 @@ BEFORE UPDATE ON company
 FOR EACH ROW
 INSERT INTO logs VALUES (NULL, "company", "Update", NOW(), USER(), DATABASE(), VERSION());
 
--- Triggers after insert tablas hacia backups
-CREATE TRIGGER AFT_INS_personal_bu_personal
-AFTER INSERT ON personal
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_personal VALUES (NEW.id_personal, NEW.gender, NEW.user_first_name, NEW.user_last_name, NEW.age);
-
-CREATE TRIGGER AFT_INS_address_bu_address
-AFTER INSERT ON address
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_address VALUES (NEW.ip_user, NEW.country_code, NEW.city, NEW.street);
-
-CREATE TRIGGER AFT_INS_account_bu_account
-AFTER INSERT ON account
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_account VALUES (NEW.user_mail, NEW.user_password, NEW.register_account);
-
-CREATE TRIGGER AFT_INS_history_bu_history
-AFTER INSERT ON history
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_history VALUES (NEW.id_history, NEW.person_history, NEW.name_page);
-
-CREATE TRIGGER AFT_INS_user_bu_user
-AFTER INSERT ON user
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_user VALUES (NEW.id_user, NEW.user_mail, NEW.id_personal, NEW.ip_user, NEW.id_history);
-
-CREATE TRIGGER AFT_INS_page_bu_page
-AFTER INSERT ON page
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_page VALUES (NEW.name_page, NEW.date_registered_page, NEW.info);
-
-CREATE TRIGGER AFT_INS_data_bu_data
-AFTER INSERT ON data
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_data VALUES (NEW.register_data, NEW.db, NEW.id_user, NEW.date_data);
-
-
-CREATE TRIGGER AFT_INS_company_bu_company
-AFTER INSERT ON company
-FOR EACH ROW
-INSERT INTO backup_db_winehouse.backup_company VALUES (NEW.duns_company, NEW.name_company, NEW.headquarters, NEW.register_data, NEW.requirement_purpose);
 
 
 -- -------- INSERTS -------- --
