@@ -1,12 +1,12 @@
 
--- -------- DATA BASES -------- --
+-- -------- DATA BASE -------- --
 -- Se crea la base de datos y se posiciona en la misma
 DROP DATABASE IF EXISTS db_winehouse;
 CREATE DATABASE db_winehouse;
 USE db_winehouse;
 SET AUTOCOMMIT = 1;
 
-
+                            
 -- -------- USERS -------- --
 -- Creacion de usuarios con contraseña
 DROP USER IF EXISTS tomas@localhost; 
@@ -33,7 +33,7 @@ CREATE TABLE `logs`(
 );
 CREATE TABLE `user`(
 	id_user INT NOT NULL AUTO_INCREMENT,
-    user_mail VARCHAR(50) NOT NULL,
+    email VARCHAR(50) NOT NULL,
     id_personal INT NOT NULL,
     ip_user VARCHAR(20) NOT NULL,
     id_history INT NOT NULL,
@@ -48,10 +48,10 @@ CREATE TABLE `personal`(
     CONSTRAINT PK_PERSONAL PRIMARY KEY (id_personal)
 );
 CREATE TABLE `account`(
-    user_mail VARCHAR (50) NOT NULL,
+    email VARCHAR (50) NOT NULL,
 	user_password VARCHAR(50) NOT NULL,
 	register_account DATETIME NOT NULL,
-    CONSTRAINT PK_ACCOUNT PRIMARY KEY (user_mail)
+    CONSTRAINT PK_ACCOUNT PRIMARY KEY (email)
 );
 CREATE TABLE `address`(
     ip_user VARCHAR(20) NOT NULL,
@@ -89,12 +89,11 @@ CREATE TABLE `company`(
 );
 
 
--- -------- ALTERS -------- --
+-- -------- FOREIGN KEY-------- --
 -- Se vinculan las tablas mediante Foreign Key
-USE db_winehouse;
 ALTER TABLE user
 	ADD FOREIGN KEY FK_USER_ADDRESS (ip_user) REFERENCES address (ip_user),
-	ADD FOREIGN KEY FK_USER_ACCOUNT (user_mail) REFERENCES account (user_mail),
+	ADD FOREIGN KEY FK_USER_ACCOUNT (email) REFERENCES account (email),
 	ADD FOREIGN KEY FK_USER_HISTORY (id_history) REFERENCES history (id_history),
     ADD FOREIGN KEY FK_USER_PERSONAL (id_personal) REFERENCES personal (id_personal);
 ALTER TABLE history	
@@ -126,19 +125,21 @@ CREATE OR REPLACE VIEW personal_view as
 CREATE OR REPLACE VIEW company_view as 
 	SELECT duns_company, name_company, requirement_purpose 
 	FROM company;
--- Vista con join de user, account, history y address
+-- Vista con join de user, account, history, personal y address
 CREATE OR REPLACE VIEW join_view as
-	SELECT DISTINCT u.id_user, ac.user_mail, h.id_history, a.ip_user
+	SELECT u.id_user, p.user_first_name, p.user_last_name, ac.email, a.street, a.city, a.country_code, h.id_history
 		FROM user u
 		INNER JOIN address a
 		ON u.ip_user = a.ip_user
 		INNER JOIN account ac
-		ON ac.user_mail = u.user_mail
+		ON ac.email = u.email
 		INNER JOIN history h
-		ON h.id_history = u.id_history;
+		ON h.id_history = u.id_history
+        INNER JOIN personal p
+        ON p.id_personal = u.id_personal
     ;
-
-
+    
+    
 -- -------- FUNCTIONS -------- --
 -- Funcion SQL muestra id mediante nombre y apellido de personal
 DROP FUNCTION IF EXISTS `user_id`;
@@ -344,17 +345,17 @@ END$$
 DROP PROCEDURE IF EXISTS `sp_insert_user`;
 DELIMITER $$
 CREATE PROCEDURE `sp_insert_user`(
-	IN p_user_mail VARCHAR(50), 
+	IN p_email VARCHAR(50), 
     IN p_id_personal INT, 
     IN p_ip_user VARCHAR(20), 
     IN p_id_history INT)
 BEGIN
-	IF p_user_mail = '' OR p_id_personal = 0 OR p_ip_user = '' OR p_id_history = 0 THEN
+	IF p_email = '' OR p_id_personal = 0 OR p_ip_user = '' OR p_id_history = 0 THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
         INSERT INTO user (`duns_company`,`name_company`,`headquarters`,`register_data`,`requirement_purpose`) 
         VALUES (p_duns_company, p_name_company, p_headquarters, p_register_data, p_requirement_purpose);
-        SELECT MAX(id_user) id, user_mail mail, id_personal, ip_user ip, id_history FROM user;
+        SELECT MAX(id_user) id, email email, id_personal, ip_user ip, id_history FROM user;
 	END IF;
 END$$
 
@@ -378,16 +379,16 @@ END$$
 DROP PROCEDURE IF EXISTS `sp_insert_account`;
 DELIMITER $$
 CREATE PROCEDURE `sp_insert_account`(
-	IN p_user_mail VARCHAR(50), 
+	IN p_email VARCHAR(50), 
     IN p_user_password VARCHAR(50), 
     IN p_register_account DATETIME)
 BEGIN
-	IF p_user_mail = '' OR p_user_password = '' OR p_register_account = '' THEN
+	IF p_email = '' OR p_user_password = '' OR p_register_account = '' THEN
 		SELECT 'Parametro faltante o invalido' ERROR;
 	ELSE
-        INSERT INTO account (`user_mail`,`user_password`,`register_account`) 
-        VALUES (p_user_mail, p_user_password, p_register_account);
-        SELECT * FROM account a WHERE a.user_mail = p_user_mail; 
+        INSERT INTO account (`email`,`user_password`,`register_account`) 
+        VALUES (p_email, p_user_password, p_register_account);
+        SELECT * FROM account a WHERE a.email = p_email; 
 	END IF;
 END$$
 
@@ -450,9 +451,9 @@ END$$
 
 DROP PROCEDURE IF EXISTS `sp_delete_account`;
 DELIMITER $$
-CREATE PROCEDURE `sp_delete_account`(IN p_user_mail VARCHAR(15))
+CREATE PROCEDURE `sp_delete_account`(IN p_email VARCHAR(15))
 BEGIN
-	DELETE FROM account a WHERE a.user_mail = p_user_mail;
+	DELETE FROM account a WHERE a.email = p_email;
     SELECT 'Elemento eliminado exitosamente' EXITOSO;
 END$$
 
@@ -582,7 +583,6 @@ FOR EACH ROW
 INSERT INTO logs VALUES (NULL, "company", "Update", NOW(), USER(), DATABASE(), VERSION());
 
 
-
 -- -------- INSERTS -------- --
 -- Se insertan los datos en las tablas
 INSERT INTO personal (`id_personal`,`gender`,`user_first_name`,`user_last_name`,`age`) 
@@ -649,7 +649,7 @@ VALUES  (null,1,'Gutkowski-Franecki'),
 		(null,13,'Heaney-Wolf'),
 		(null,8,'Leffler-Dickens'),
 		(null,14,'Powlowski and Sons');
-INSERT INTO account (`user_mail`,`user_password`,`register_account`) 
+INSERT INTO account (`email`,`user_password`,`register_account`) 
 VALUES  ('abelison3@hc360.com','DncpgPW','2022-05-08 05:51:13'),
 		('afattorec@hud.gov','cNCT54Okf','2021-07-09 19:27:02'),
 		('bbearward7@globo.com','7HI9JpnYMPRS','2022-05-16 03:30:05'),
@@ -665,7 +665,7 @@ VALUES  ('abelison3@hc360.com','DncpgPW','2022-05-08 05:51:13'),
 		('speacocka@g.co','p8yg6M','2021-12-25 18:47:14'),
 		('tdelany5@arstechnica.com','uzVT84w40','2021-08-04 22:13:49'),
 		('twetternd@1und1.de','QcxNh6R','2021-12-21 19:37:56');
-INSERT INTO user (`id_user`,`user_mail`,`id_personal`,`ip_user`,`id_history`) 
+INSERT INTO user (`id_user`,`email`,`id_personal`,`ip_user`,`id_history`) 
 VALUES  (null,'abelison3@hc360.com',2,'199.52.19.14',2),
 		(null,'mglowinski0@answers.com',15,'125.207.210.105',15),
 		(null,'dmcinility6@rediff.com',1,'170.2.31.135',1),
@@ -718,7 +718,6 @@ VALUES  ('04-413-3487','Jaxspan','Mibu',1,'vestibulum ante ipsum primis in fauci
 -- -------- TRANSACTION -------- --
 #Anulacion de autocommit
 SET AUTOCOMMIT = 0;
-SELECT @@autocommit;
 #Eliminacion de datos tabla company
 START TRANSACTION;
 SAVEPOINT INITIAL_DELETE;
